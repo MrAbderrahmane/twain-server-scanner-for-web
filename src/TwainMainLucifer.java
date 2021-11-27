@@ -1,20 +1,17 @@
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
 import java.util.concurrent.Executors;
-
-import javax.imageio.ImageIO;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+
+import free.lucifer.jtwain.exceptions.TwainException;
 
 public class TwainMainLucifer {
 	
@@ -60,16 +57,18 @@ public class TwainMainLucifer {
 				OutputStream responseBody = exchange.getResponseBody();
 				String command = extractCommand(exchange);
 				Headers responseHeaders = exchange.getResponseHeaders();
+				responseHeaders.set("Access-Control-Allow-Origin", "*");
 				processCommand(command, responseHeaders, responseBody, exchange);
 				responseBody.close();
 			} else {
-				notFound(exchange);
+				//notFound(exchange);
+				sendErrorResponse("Error", exchange);
 			}
 
 		}
 
 		private void notFound(HttpExchange exchange) throws IOException{
-			exchange.sendResponseHeaders(404, 0);
+			exchange.sendResponseHeaders(404, -1);
 			exchange.getRequestBody().close();
 		}
 		
@@ -79,55 +78,71 @@ public class TwainMainLucifer {
 			try {
 				if (command.equals(CMD_SCAN)) {
 					MySourceManager sm = MySourceManager.instance();
-					if(deviceName != null){
+					if(deviceName == null){
 						String dName = sm.getDeviceNames()[0];
 						deviceName = dName;
 					}
 					MySource ms = sm.getSource(deviceName);
 					BufferedImage s = ms.scan();
 					String response = MyImageUtils.toBase64(s);
-					exchange.sendResponseHeaders(200, 0);
-					//addDefaultResponseHeader(responseHeaders);
+					responseHeaders.set("Content-Type", "text/plain");
+					exchange.sendResponseHeaders(200, response.length());
 					responseBody.write(response.getBytes());
+					responseBody.close();
 				} else if (command.equals(CMD_SELECT)) {
 					String[] deviceNames = MySourceManager.getDeviceNames();
 					String response;
 					if (deviceNames != null) {
-						response = deviceNames.toString();						
+						response = Arrays.asList(deviceNames).toString()
+							.replace("[", "[\"")
+							.replace("]", "\"]")
+							.replace(", ", "\", \"");
 					} else {
 						System.out.println("No scanner device found !!");
 						notFound(exchange);
 						return;
 					}
-					exchange.sendResponseHeaders(200, 0);
 					addDefaultResponseHeader(responseHeaders);
+					exchange.sendResponseHeaders(200, 0);
 					responseBody.write(response.getBytes());
+					responseBody.close();
 				} else if (command.startsWith(CMD_DRV_)) {
 					String newDeviceName = URLDecoder.decode(command.replace(CMD_DRV_ + "/", ""), "UTF-8");
-					if(newDeviceName.isEmpty() || newDeviceName == null){
+					String[] deviceNames = MySourceManager.getDeviceNames();
+					if(!Arrays.asList(deviceNames).contains(newDeviceName)){
 						notFound(exchange);
 						return;
 					}
 					deviceName = newDeviceName;					
-					exchange.sendResponseHeaders(200, 0);
-					//addDefaultResponseHeader(responseHeaders);
+					addDefaultResponseHeader(responseHeaders);
+					exchange.sendResponseHeaders(200, -1);
 					responseBody.close();
 					
 				} else {
 					notFound(exchange);
 				}
 				
-			} catch (Exception e) {
-				// !TODO handle all typeS of error
+			}  catch (TwainException e) {
 				System.err.println("Erreur lors du scan");
 				e.printStackTrace();
-				
-				notFound(exchange);
+				sendErrorResponse(e.getMessage(), exchange);
+			} catch (Exception e) {
+				System.out.println("Unhndled exception");
+				e.printStackTrace();
+				sendErrorResponse("Unhandled exception",exchange);
 			}
 		}
 
+		private void sendErrorResponse(String message, HttpExchange exchange) throws IOException{
+			exchange.getResponseHeaders().set("Content-Type", "text/plain");
+			exchange.sendResponseHeaders(400, message.length());
+			OutputStream res = exchange.getResponseBody();
+			res.write(message.getBytes());
+			res.close();
+		}
+
 		public void addDefaultResponseHeader (Headers responseHeaders) {
-			responseHeaders.set("Content-Type", "text/plain; charset=UTF-8");
+			responseHeaders.set("Content-Type", "application/json");
 		}
 		
 		private String extractCommand (HttpExchange exchange) {
@@ -135,4 +150,3 @@ public class TwainMainLucifer {
 		}
 	}
 }
-

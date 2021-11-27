@@ -1,4 +1,4 @@
 bin/
 .vscode
 **/*.http
-*.jar
+/*.jar

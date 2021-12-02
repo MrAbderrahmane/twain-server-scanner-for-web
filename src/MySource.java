@@ -10,7 +10,7 @@ import free.lucifer.jtwain.exceptions.TwainException;
 import free.lucifer.jtwain.scan.Source.ColorMode;
 
 public class MySource implements TwainListener {
-    private double dpi = 200.0;
+    private double dpi = 100.0;
     private ColorMode color = ColorMode.COLOR;
     private boolean autoDocumentFeeder = false;
     private boolean systemUI = false;
@@ -79,7 +79,7 @@ public class MySource implements TwainListener {
 
     private void setupSource(TwainSource source) {
         try {
-            source.setShowProgressBar(false);
+            source.setShowProgressBar(true);
             source.setShowUI(systemUI);
 
             if (!systemUI) {

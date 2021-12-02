@@ -3,7 +3,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.Executors;
 
 import com.sun.net.httpserver.Headers;
@@ -91,9 +93,16 @@ public class TwainMainLucifer {
 					responseBody.close();
 				} else if (command.equals(CMD_SELECT)) {
 					String[] deviceNames = MySourceManager.getDeviceNames();
+					List<String> list = Arrays.asList(deviceNames);
+					if(list.size() == 1){
+						deviceName = list.get(0);
+					}
+					List<String> list1 = new ArrayList<>();
+					list1.add(deviceName);
+					list1.addAll(list);
 					String response;
 					if (deviceNames != null) {
-						response = Arrays.asList(deviceNames).toString()
+						response = list1.toString()
 							.replace("[", "[\"")
 							.replace("]", "\"]")
 							.replace(", ", "\", \"");

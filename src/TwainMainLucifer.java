@@ -63,7 +63,6 @@ public class TwainMainLucifer {
 				processCommand(command, responseHeaders, responseBody, exchange);
 				responseBody.close();
 			} else {
-				//notFound(exchange);
 				sendErrorResponse("Error", exchange);
 			}
 
@@ -71,12 +70,12 @@ public class TwainMainLucifer {
 
 		private void notFound(HttpExchange exchange) throws IOException{
 			exchange.sendResponseHeaders(404, -1);
-			exchange.getRequestBody().close();
 		}
 		
 		private void processCommand (String command, Headers responseHeaders, OutputStream responseBody, HttpExchange exchange)
 				throws IOException {			
 			System.out.println("Request command : " + command);
+			String func = Arrays.asList(exchange.getRequestURI().getQuery().split("=")).get(1);
 			try {
 				if (command.equals(CMD_SCAN)) {
 					MySourceManager sm = MySourceManager.instance();
@@ -87,10 +86,10 @@ public class TwainMainLucifer {
 					MySource ms = sm.getSource(deviceName);
 					BufferedImage s = ms.scan();
 					String response = MyImageUtils.toBase64(s);
-					responseHeaders.set("Content-Type", "text/plain");
+					addDefaultResponseHeader(responseHeaders);
+					response = func + "([\"" + response + "\"]);";
 					exchange.sendResponseHeaders(200, response.length());
 					responseBody.write(response.getBytes());
-					responseBody.close();
 				} else if (command.equals(CMD_SELECT)) {
 					String[] deviceNames = MySourceManager.getDeviceNames();
 					List<String> list = Arrays.asList(deviceNames);
@@ -108,25 +107,25 @@ public class TwainMainLucifer {
 							.replace(", ", "\", \"");
 					} else {
 						System.out.println("No scanner device found !!");
-						notFound(exchange);
+						sendErrorResponse("No scanner device found !!", exchange);
 						return;
 					}
+					response = func + "(" + response + ");";
 					addDefaultResponseHeader(responseHeaders);
 					exchange.sendResponseHeaders(200, 0);
 					responseBody.write(response.getBytes());
-					responseBody.close();
 				} else if (command.startsWith(CMD_DRV_)) {
 					String newDeviceName = URLDecoder.decode(command.replace(CMD_DRV_ + "/", ""), "UTF-8");
 					String[] deviceNames = MySourceManager.getDeviceNames();
 					if(!Arrays.asList(deviceNames).contains(newDeviceName)){
-						notFound(exchange);
+						sendErrorResponse(newDeviceName + "is not present!", exchange);
 						return;
 					}
-					deviceName = newDeviceName;					
+					deviceName = newDeviceName;	
+					String response =  func + "()";				
 					addDefaultResponseHeader(responseHeaders);
-					exchange.sendResponseHeaders(200, -1);
-					responseBody.close();
-					
+					exchange.sendResponseHeaders(200, response.length());
+					responseBody.write(response.getBytes());					
 				} else {
 					notFound(exchange);
 				}
@@ -143,15 +142,16 @@ public class TwainMainLucifer {
 		}
 
 		private void sendErrorResponse(String message, HttpExchange exchange) throws IOException{
-			exchange.getResponseHeaders().set("Content-Type", "text/plain");
-			exchange.sendResponseHeaders(400, message.length());
+			addDefaultResponseHeader(exchange.getResponseHeaders());
+			String func = Arrays.asList(exchange.getRequestURI().getQuery().split("=")).get(1);
+			String response = func + "({\"error\":\"" + message + "\"});";
+			exchange.sendResponseHeaders(200, response.length());
 			OutputStream res = exchange.getResponseBody();
-			res.write(message.getBytes());
-			res.close();
+			res.write(response.getBytes());
 		}
 
 		public void addDefaultResponseHeader (Headers responseHeaders) {
-			responseHeaders.set("Content-Type", "application/json");
+			responseHeaders.set("Content-Type", "application/javascript; charset=utf-8");
 		}
 		
 		private String extractCommand (HttpExchange exchange) {
